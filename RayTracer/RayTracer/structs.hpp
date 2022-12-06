@@ -1,7 +1,6 @@
 #pragma once
 
 #include <iostream> //input output stream --> a file in the standard library
-//#include <cmath>
 #include <fstream>
 #include <sstream>
 #include <cstdlib> //For exit function
@@ -9,6 +8,8 @@
 #include <string>
 #include <glm/vec3.hpp>
 #include <glm/vec2.hpp>
+#include <glm/gtc/matrix_transform.hpp> //for inverse matrices
+#include <cmath> //for square roots
 using namespace std;
 using namespace glm;
 
@@ -34,6 +35,10 @@ struct Sphere {
     float ks;
     float kr;
     int spec_exp;
+    mat4 transpose;
+    mat4 scaleTranspose;
+    mat4 inverseScaleTranspose; //For the normal
+    vec4 cannonicalIntersectionPoint;
 };
 
 //Struct for light
@@ -61,3 +66,19 @@ struct Pixel {
     unsigned char b;
 };
 
+//Struct for a ray
+struct Ray {
+    string name;
+    vec4 starting_point;
+    vec4 direction;
+    int depth;
+};
+
+//Struct for an intersected sphere
+struct IntersectedSphere {
+    int order;
+    vec4 normal;
+    float t;
+    vec4 intersection_point;
+    vec4 reflected_ray;
+};

@@ -11,28 +11,16 @@
 #include <map>
 #include <glm/vec3.hpp>
 #include <glm/geometric.hpp>
+#include <glm/mat4x4.hpp>
 #include <vector>
 #include <algorithm> // in order to use "replace" function for testParsing
 
 #include "structs.hpp"
+#include "Parsing.h"
 
 using namespace std;
 
 
-#define MAX_LINE_LEN 132
-int sphere_count = 0;
-int light_count = 0;
-
-//vectors for the specific structs
-vector <View> view;
-vector <Sphere> spheres;
-vector <Light> lights;
-vector <Background> background_info;
-vector <Output> output_name;
-
-
-//Declare functions:
-void populate_structs(char * lines);
 
 
 /* Copied function for creating a ppm from a binary*/
@@ -61,448 +49,278 @@ void save_imageP6(int Width, int Height, const char* fname, unsigned char* pixel
 ////////////////////////////// My code /////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-/* Step 1A:
- *        Read file into a string variable  
- *
+
+/* Part 1:
+ * FUNCTION =   Compute_closest_intersection
+ * 
+ * Parameters:  a ray object
+ * Output:      a pair with first being a boolean letting the program know if the sphere was intersected or not and the second being
+                an IntersectedSphere struct object containing the t value, the intersection point, the order number of the sphere in the
+                case where the first==true
+ * 
+ * Purpose:     For each sphere in the vector array of spheres, check if the ray intersects them. If it does then take the smallest 
+ *              intersection along with the sphere number and store them as x,y coordinates within the solutions vector array of vec2's. 
+ *              Then for each solutions' vec2, pick out the smallest x value (ie the smallest t value) and save its y component as the 
+ *              intersected_sphere integer which represent's the ith sphere we are dealing with.
  */
-string read_file(char* file_name) { 
-    ifstream f(file_name);
-    string file;
-    if (f) {
-        ostringstream ss;
-        ss << f.rdbuf();
-        file = ss.str();
+pair <bool,IntersectedSphere> compute_closest_intersection(Ray ray) {
+    /* STEP 1.a) Initialize a pair to be returned */
+    pair <bool, IntersectedSphere> inter_pair;
+    inter_pair.first = false;
+
+    /* STEP 1.b) Create a new intersected sphere object in order to save the t, the order (j value) and the intersection point*/
+    IntersectedSphere intersected_sphere = IntersectedSphere();
+    inter_pair.second = intersected_sphere;
+
+    // The solutions' vector of vec2's parameters are:
+    // --> x is t (ie vector scaler to reach intersection point) 
+    // --> y is j=the numbered sphere in the forloop
+    vector <vec2> solutions; 
+    
+    for (int j=0; j < spheres.size(); j++) {
+        /* STEP 1.c) invert ray for each sphere based on the sphere's scalars. */
+        vec4 inverted_starting_point = spheres[j].inverseScaleTranspose * ray.starting_point;
+        vec4 inverted_direction = spheres[j].inverseScaleTranspose * ray.direction;
+        
+
+        /* STEP 1.d) Use the quadratic formula to check for solutions (intersections)
+         * --> If (determinant >= 0) then find the solution(s) representing the intersection pt(s) */
+
+        // First store S (inverted starting point) and c (inverted direction) in NON-homogeneous coordinates
+        vec3 S = { inverted_starting_point.x, inverted_starting_point.y, inverted_starting_point.z };
+        vec3 c = { inverted_direction.x, inverted_direction.y, inverted_direction.z };
+        
+        const float determinant = pow(dot(S, c), 2) - pow(length(c), 2) * (pow(length(S), 2) - 1);
+        
+        if (determinant >= 0.0){
+            // In this case the ray hits the sphere either once or twice, so find the solution for t
+            float t1 = -(dot(S, c) / pow(length(c), 2)) - (sqrt(determinant)/pow(length(c),2));
+            float t2 = -(dot(S, c) / pow(length(c), 2)) + (sqrt(determinant) / pow(length(c), 2));
+
+            //push the smaller one & save which sphere was affected by storing the j value
+            if (t1 < t2) {
+                //push t1 to solutions vector
+                solutions.push_back(vec2{ t1,j });
+                spheres[j].cannonicalIntersectionPoint = inverted_starting_point + t1 * inverted_direction;
+            }
+            else {
+                solutions.push_back(vec2{ t2,j });
+                spheres[j].cannonicalIntersectionPoint = inverted_starting_point + t1 * inverted_direction;
+            }
+        }        
     }
-    return file;
+
+    //If no solutions found then return a null vec4
+    if (solutions.size() == 0) {
+        return inter_pair;
+    }
+
+    /* STEP 2.b) pick the smallest intersection */
+    inter_pair.second.order = solutions[0].y;
+    inter_pair.second.t = solutions[0].x;
+
+    for (int i = 1; i < solutions.size(); i++) {
+        if (solutions[i].x < inter_pair.second.t) {
+
+            inter_pair.second.t = solutions[i].x;
+            inter_pair.second.order = solutions[i].y;
+        }
+    }
+    
+    /* STEP 2.b) Delete all the entries in the vector of "intersections" so that it can be reused */
+    solutions.clear();
+
+    //find the normal at that intersection point
+    vec4 normal = { spheres[intersected_sphere.order].cannonicalIntersectionPoint - vec4{spheres[intersected_sphere.order].position,0} };
+    normal = normal * spheres[intersected_sphere.order].inverseScaleTranspose;
+    normal = normalize(normal);
+    inter_pair.second.normal = normal;
+
+    //find the reflected vector for later
+    inter_pair.second.reflected_ray = -2 * dot(normal, ray.direction) * normal + ray.direction;
+
+
+    inter_pair.second.intersection_point = ray.starting_point + intersected_sphere.t * ray.direction;
+    
+    //Return the intersected sphere object
+    return inter_pair;
 }
 
-/* Part 1B:
- *         Parse the stored string file into usable variables
- *
+/* Part 4:
+ *         check if there is a shadow at the intersection pt if there isn't then add the ADS light, if there is then don't
  */
+vec3 shadow_ray(Light light, IntersectedSphere intersected_sphere) {
+    vec3 color{ 0,0,0 };
+    // Create a ray with starting point being the intersection_point and direction being the normalized dir towards the light
+    Ray ray = Ray();
+    ray.starting_point={intersected_sphere.intersection_point};
+    ray.direction = { vec4{light.position,1.0} - intersected_sphere.intersection_point };
+    ray.direction = normalize(ray.direction);
 
-void parse_file_string(string file) {
-    // I want to tokenize the string first based on the end of line char, then on spaces
-    // Splits str[] according to given delimiters.
-    // and returns next token. It needs to be called
-    // in a loop to get all tokens. It returns NULL
-    // when there are no more tokens.
+    //check if in shadow. If yes, then don't add if no then compute ADS and add
+    //It will be in shadow if there is an object in front of the light so check for the closest intersection from the light and if that intersection doesn't equal
+    //our intersection_point then too bad (will have to be careful with floating pt error!!). Or going from the object to the light. Either way
+    pair <bool, IntersectedSphere> closest_intersection = compute_closest_intersection(ray);
+    if (!closest_intersection.first) { //Then it does intersect some spheres then check if the t value is less than the distance to the light
+        float light_distance = length(vec4{ vec4{light.position,0} - intersected_sphere.intersection_point });
+        float sphere_distance = length(vec3{ closest_intersection.second.intersection_point - intersected_sphere.intersection_point });
+        if (sphere_distance <= light_distance) {
+            return color;
+        }
+    }
 
-    char* next_line = NULL;
+
  
-    //returns first line
-    char* lines = strtok_s(&file[0], "\n", &next_line);
+    //otherwise compute ADS
+    // r = Light.color.x * Ka + Lightx*Kd(N dot lightRayDir) + Lightx * Ks * (R dot V)^ n
     
-    while (lines != NULL) {
-        populate_structs(lines);
-        lines = strtok_s(NULL, "\n", &next_line);
-    }
+    //I'm missing (R dot V) ^ n
+    color.x = light.color.x * spheres[intersected_sphere.order].ka 
+        + light.color.x*spheres[intersected_sphere.order].kd * dot(intersected_sphere.normal, ray.direction) 
+        + light.color.x* spheres[intersected_sphere.order].ks;
+    //* pow(dot(intersected_sphere.reflected_ray, ray.direction), spheres[intersected_sphere.order].spec_exp) 
+
+    color.y = light.color.y * spheres[intersected_sphere.order].ka
+        + light.color.y * spheres[intersected_sphere.order].kd * dot(intersected_sphere.normal, ray.direction)
+        + light.color.y * spheres[intersected_sphere.order].ks;
+
+    color.x = light.color.z * spheres[intersected_sphere.order].ka
+        + light.color.z * spheres[intersected_sphere.order].kd * dot(intersected_sphere.normal, ray.direction)
+        + light.color.z * spheres[intersected_sphere.order].ks;
+    return color;
 }
 
-
-/* Part 1C:
- *         Populate the correct structs
- *
- */
-void populate_structs(char* current_line) {
-    // Replace all tabs with a space (nescessary for testParsing)
-    cout << "current line before: " << current_line << "\n";
-    string buffer(current_line);
-    std::replace(buffer.begin(), buffer.end(), '\t', ' ');
-    current_line = &buffer[0];
-    cout << "current line after: " << current_line << "\n";
-    cout << "buffer after is: " << buffer;
+vec3 raytrace(Ray ray) {
     
-    // Get the first word
-    char* next_word = NULL;
-    char* words = strtok_s(current_line, " ", &next_word);
-   
-    if (strcmp(words, "NEAR")==0) {
-        cout << "\nin near\n";
-        //Get the near parameter
-        words = strtok_s(NULL, " ", &next_word); // would this be on \n?
-        if (view.size() == 0) { // view is a vector of View structs. If it's empty then
-            //no view struct created yet
-            View v = View();
-            v.near = stof(words); // convert string to float
-            view.push_back(v);    // push the newly created View struct v into the vector of structs view
-            cout << "in View struct near is: " << v.near << "\n"; // print it out for reference
-        }
-        else { // the vector of View structs isn't empty so there already is a View struct created
-            //a view struct already exists so push into it
-            view[0].near = stof(words); //In all cases there will only be one view struct
-            cout << "in View struct near is: " << view[0].near << "\n";
-        }
+    //Continue raytracing until maxed out on depth
+    if (ray.depth <= 0) {
+        //If maxed out on depth then return black
+        return { 0,0,0 };
     }
-    else if (strcmp(words, "LEFT")==0) {
-        cout << "\nin left\n";
-        //Get the left parameter
-        words = strtok_s(NULL, " ", &next_word);
-        if (view.size() == 0) { // the vector of View structs is empty
-            //create a new View struct to push into vector view of Views.
-            View v = View();
-            v.left = stof(words);
-            view.push_back(v);
-            cout << "in View struct left is: " << v.left << "\n";
-        }
-        else {
-            //a view struct already exists so push into it
-            view[0].left = stof(words); // In all cases there will only be one View struct
-            cout << "in View struct left is: " << view[0].left << "\n";
-        }
+    //update ray depth to not raytrace forever
+    ray.depth--;
+
+    /* STEP 1: check for the closest intersection with all objects*/
+    pair <bool,IntersectedSphere> closest_intersection = compute_closest_intersection(ray);
+    //cout << "closest intersected sphere is numbered: " << closest_intersection.second.order << "\n";
+    //vec4 intersection_point{ 0,0,0, 1 };//for now so that it compiles
+    if (!closest_intersection.first) {
+        // if there is no intersection then return the background color
+        //cout << background_info[0].color.x << background_info[0].color.y << background_info[0].color.z;
+        return background_info[0].color;
     }
-    else if (strcmp(words, "RIGHT")==0) {
-        cout << "\nin right\n";
-        //Get the "right" parameter
-        words = strtok_s(NULL, " ", &next_word);
-        if (view.size() == 0) { //the vector of View structs is empty
-            //no view struct created yet
-            View v = View();
-            v.right = stof(words);
-            view.push_back(v);
-            cout << "in View struct right is: " << v.right << "\n";
-        }
-        else {
-            //a view struct already exists so push into it
-            view[0].right = stof(words);
-            cout << "in View struct right is: " << view[0].right << "\n";
-        }
-    }
-    else if (strcmp(words, "BOTTOM")==0){
-        cout << "\nin bottom\n";
-        //Get the near parameter
-        words = strtok_s(NULL, " ", &next_word);
-        if (view.size() == 0) { // the vector of View structs is empty
-            //no view struct created yet
-            View v = View();
-            v.bottom = stof(words);
-            view.push_back(v);
-            cout << "in View struct bottom is: " << v.bottom << "\n";
-        }
-        else {
-            //a view struct already exists so push into it
-            view[0].bottom = stof(words);
-            cout << "in View struct bottom is: " << view[0].bottom << "\n";
-        }
-    }
-    else if (strcmp(words, "TOP")==0) {
-        cout << "\nin top\n";
-        //Get the near parameter
-        words = strtok_s(NULL, " ", &next_word);
-        if (view.size() == 0) { // No vector of View structs created yet
-            //no view struct created yet
-            View v = View();
-            v.top = stof(words);
-            view.push_back(v);
-            cout << "in View struct top is: " << v.top << "\n";
-        }
-        else {
-            //a view struct already exists so push into it
-            view[0].top = stof(words);
-            cout << "in View struct view is: " << view[0].top << "\n";
-        }
-    }
-    else if (strcmp(words, "RES")==0) {
-        cout << "\nin res\n";
-        //Get the res x parameter
-        words = strtok_s(NULL, " ", &next_word);
-        if (view.size() == 0) { // No vector of View structs exists yet
-            //no view struct created yet
-            View v = View();
-            v.resolution.x = stof(words);
-            view.push_back(v);
-            cout << "in View struct Res x is: " << v.resolution.x << "\n";
-        }
-        else {
-            //a view struct already exists so push into it
-            view[0].resolution.x = stof(words);
-            cout << "in View struct Res x is: " << view[0].resolution.x << "\n";
-        }
+    cout << "something has been intersected\n";
 
-        //Get the res y parameter
-        words = strtok_s(NULL, " ", &next_word);
-        view[0].resolution.y = stof(words);
-        cout << "in View struct Res y is: " << view[0].resolution.y << "\n";
-    }
-    else if (strcmp(words, "SPHERE")==0) {
-        cout << "\nin sphere\n";
-        //Get the name
-        words = strtok_s(NULL, " ", &next_word);
-        if (spheres.size() == 0) { // no vector of Sphere structs created yet
-            //no sphere struct created yet
-            Sphere s1 = Sphere();
-            s1.name = words;
-            spheres.push_back(s1);
-            
-        }
-        else {
-            //a view struct already exists so push into it
-            spheres[spheres.size() - 1].name = words;
-       
-        }
+    ///* STEP 2: check for shadows and add them up*/
+    //vec3 color_shadow= shadow_ray(lights[0], closest_intersection.second);
+    //for (int i = 1; i < lights.size(); i++) {
+    //    color_shadow.x += shadow_ray(lights[i], closest_intersection.second).x;
+    //    color_shadow.y += shadow_ray(lights[i], closest_intersection.second).y;
+    //    color_shadow.z += shadow_ray(lights[i], closest_intersection.second).z;
 
-        // get the x position
-        words = strtok_s(NULL, " ", &next_word);
-        spheres[spheres.size() - 1].position.x = stof(words);
+    //}
+    ///*STEP 3: raytrace for reflected rays*/
+    ////I need to somehow get which sphere i'm dealing with based on the closest intersection so that i can calculate the normal. Why don't I just make a global variable? sphere_num that gets updated whenever I call closest intersection pt. 
+    //// Does this mean I reflect the ray over a normal on the sphere? YES--> How can i get the normal???
 
-        // get the y position
-        words = strtok_s(NULL, " ", &next_word);
-        spheres[spheres.size() - 1].position.y = stof(words);
+    //// initialize a new ray for the reflected ray
+    //Ray reflected_ray = Ray();
+    //reflected_ray.direction = closest_intersection.second.reflected_ray;
+    //reflected_ray.depth = 3;
+    //reflected_ray.starting_point = closest_intersection.second.intersection_point;
+    //vec3 color_reflected = raytrace(reflected_ray);
 
-        // get the z position
-        words = strtok_s(NULL, " ", &next_word);
-        spheres[spheres.size() - 1].position.z = stof(words);
-
-        // get the x scalar
-        words = strtok_s(NULL, " ", &next_word);
-        spheres[spheres.size() - 1].scaler.x = stof(words);
-
-        // get the y scalar
-        words = strtok_s(NULL, " ", &next_word);
-        spheres[spheres.size() - 1].scaler.y = stof(words);
-
-        // get the z scalar
-        words = strtok_s(NULL, " ", &next_word);
-        spheres[spheres.size() - 1].scaler.z = stof(words);
-
-        // get the x color
-        words = strtok_s(NULL, " ", &next_word);
-        spheres[spheres.size() - 1].color.x = stof(words);
-
-        // get the y color
-        words = strtok_s(NULL, " ", &next_word);
-        spheres[spheres.size() - 1].color.y = stof(words);
-
-        // get the z color
-        words = strtok_s(NULL, " ", &next_word);
-        spheres[spheres.size() - 1].color.z = stof(words);
-
-        // get the ka
-        words = strtok_s(NULL, " ", &next_word);
-        spheres[spheres.size() - 1].ka = stof(words);
-
-        // get the kd
-        words = strtok_s(NULL, " ", &next_word);
-        spheres[spheres.size() - 1].kd = stof(words);
-
-        // get the ks
-        words = strtok_s(NULL, " ", &next_word);
-        spheres[spheres.size() - 1].ks = stof(words);
-
-
-        // get the kr
-        words = strtok_s(NULL, " ", &next_word);
-        spheres[spheres.size() - 1].kr = stof(words);
-
-        // get the spec exp
-        words = strtok_s(NULL, " ", &next_word);
-        spheres[spheres.size() - 1].spec_exp = stof(words);
-        //cout << "the spec exp is: " << spheres[spheres.size() - 1].spec_exp;
-
-      
-        cout << "in Sphere struct there is the following sphere: \n";
-        cout << "sphere:\n" << spheres[spheres.size() - 1].name << "\n" 
-            << spheres[spheres.size() - 1].position.x<< " " <<spheres[spheres.size() - 1].position.y
-            << " " << spheres[spheres.size() - 1].position.z<< " " << spheres[spheres.size() - 1].scaler.x
-            << " " << spheres[spheres.size() - 1].scaler.y<< " " << spheres[spheres.size() - 1].scaler.z
-            << " " << spheres[spheres.size() - 1].color.x<< " " << spheres[spheres.size() - 1].color.y
-            << " " << spheres[spheres.size() - 1].color.z<< " " << spheres[spheres.size() - 1].ka
-            << " " << spheres[spheres.size() - 1].kd <<" " << spheres[spheres.size() - 1].ks << " " << spheres[spheres.size() - 1].kr << " " << spheres[spheres.size() - 1].spec_exp << "\n";
-
-    }
-    else if (strcmp(words, "LIGHT") == 0) {
-        cout << "\nin light\n";
-        //Get the name
-        words = strtok_s(NULL, " ", &next_word);
-        if (lights.size() == 0) { // The vector of Light structs is empty
-            //no light struct created yet
-            Light l1 = Light();
-            l1.name = words;
-            lights.push_back(l1);
-
-        }
-        else {
-            //a light struct already exists so push into it
-            lights[lights.size() - 1].name = words;
-        }
-
-        // get the x position
-        words = strtok_s(NULL, " ", &next_word);
-        lights[lights.size() - 1].position.x = stof(words);
-
-        // get the y position
-        words = strtok_s(NULL, " ", &next_word);
-        lights[lights.size() - 1].position.y = stof(words);
-
-        // get the z position
-        words = strtok_s(NULL, " ", &next_word);
-        lights[lights.size() - 1].position.z = stof(words);
-
-        // get the x color
-        words = strtok_s(NULL, " ", &next_word);
-        lights[lights.size() - 1].color.x = stof(words);
-
-        // get the y color
-        words = strtok_s(NULL, " ", &next_word);
-        lights[lights.size() - 1].color.y = stof(words);
-
-        // get the z color
-        words = strtok_s(NULL, " ", &next_word);
-        lights[lights.size() - 1].color.z = stof(words);
-
-        cout << "The light vector contains the following Light struct: \n";
-        cout << "light:\n" << lights[lights.size() - 1].name << "\n"
-            << lights[lights.size() - 1].position.x << " " << lights[lights.size() - 1].position.y
-            << " " << lights[lights.size() - 1].position.z << " " << " "
-            << lights[lights.size() - 1].color.x << " " << lights[lights.size() - 1].color.y
-            << " " << lights[lights.size() - 1].color.z << "\n";
-    }
-    else if (strcmp(words, "BACK") == 0) {
-        cout << "\nin back\n";
-        //Get the x color
-        words = strtok_s(NULL, " ", &next_word);
-        if (background_info.size() == 0) { // the background_info vector of Background structs is empty
-            //no background_info struct created yet
-            Background b = Background();
-            b.color.x = stof(words);
-            background_info.push_back(b);
-
-        }
-        else {
-            //a light struct already exists so push into it
-            background_info[background_info.size() - 1].color.x = stof(words);
-        }
-
-        //get the y color
-        words = strtok_s(NULL, " ", &next_word);
-        background_info[background_info.size() - 1].color.y = stof(words);
-
-        //get the z color
-        words = strtok_s(NULL, " ", &next_word);
-        background_info[background_info.size() - 1].color.z = stof(words);
-
-        cout << "the background_info vector contains the following Background struct with color: \n";
-        cout << "background color is:\n" << background_info[background_info.size() - 1].color.x << " " << background_info[background_info.size() - 1].color.y
-            << " " << background_info[background_info.size() - 1].color.z << "\n";
-            
-    }
-    else if (strcmp(words, "AMBIENT")==0) {
-        cout << "\nin ambient\n";
-        //Get the x ambient
-        words = strtok_s(NULL, " ", &next_word);
-        if (background_info.size() == 0) { //The background_info vector of Background structs is empty
-            //no background_info struct created yet
-            Background b = Background();
-            b.ambient.x = stof(words);
-            background_info.push_back(b);
-
-        }
-        else {
-            //an ambient struct already exists so push into it
-            background_info[background_info.size() - 1].ambient.x = stof(words);
-        }
-
-        //get the y ambient
-        words = strtok_s(NULL, " ", &next_word);
-        background_info[background_info.size() - 1].ambient.y = stof(words);
-
-        //get the z color
-        words = strtok_s(NULL, " ", &next_word);
-        background_info[background_info.size() - 1].ambient.z = stof(words);
-
-        cout << "the background_info vector contains the following Background struct with ambient: \n";
-        cout << background_info[background_info.size() - 1].ambient.x << " " << background_info[background_info.size() - 1].ambient.y
-            << " " << background_info[background_info.size() - 1].ambient.z << "\n";
-    }
-    else {
-        cout << "\nin output\n";
-        //Get the output parameter:
-        words = strtok_s(NULL, " ", &next_word);
-        //There is only one output so the output vector of Output structs should be empty
-        Output out = Output();
-        out.name = words;
-        output_name.push_back(out);
-        cout << "the output_name vector contains the following Output struct with the name: "
-            << output_name[0].name << "\n";
-
-    }
+    //cout << "the closest intersected sphere is: "<<(closest_intersection.second.order);
+    //return (vec3{ spheres[closest_intersection.second.order].color + spheres[closest_intersection.second.order].kr * color_reflected});
 }
-//*****************************************************************************************************//
-//***** STEP 2: Set the camera & the image plane ******************************************************//
-//*****************************************************************************************************//
-// Set the viewport and resolution in camera coordinates
-// Img parameters:
-// 2W, 2H given by TOP, BOTTOM, LEFT, RIGHT in view struct
-// number of Pixels is nCols x nRows --> in our case it's resolution in view struct
-// camera parameters:
-// Camera coord sys (eye, u, v, n), where n is the normal of the viewing plane, and u v are the span of the viewing plane & uvn are 
-// orthogonal to each other
-// Image plane at n = -near where near is in view struct
 
-
-int main(int argc, char *argv[]) //argc is argument count--> stores the # of command line arguments passed by the user incl the name of the program
-// therefore if there is a command line arg then the value of argc is 2
-// argv is argument vector --> an array of character pointers listing all the arguments
-// argv[0] is the name of the program and argv[1] will be the name of the input file
-{
-    // STEP 1: READ the input FILE
+int main(int argc, char *argv[]) {
     parse_file_string(read_file(argv[1]));
 
-    // STEP 2: create correct variables
-    int Width = view[0].resolution.x;
-    int Height = view[0].resolution.y;
-    const char *fname6 = output_name[0].name.c_str();
-    Pixel* pixels = new Pixel[Width*Height];
+    //// STEP 1.b: update the inverse scale and inverse transpose matrices of each sphere. 
+    //mat4x4 unit_matrix = { 1, 0, 0, 0,
+    //                       0, 1, 0, 0,
+    //                       0, 0, 1, 0,
+    //                       0, 0, 0, 1 };
+    //for (Sphere sphere : spheres) {
+    //    sphere.transpose = translate(unit_matrix, sphere.position);
+    //    sphere.scaleTranspose = scale(sphere.transpose, sphere.scaler);
+    //    sphere.inverseScaleTranspose = inverse(sphere.scaleTranspose);
 
-    // Step 3: populate pixels
-    // --> for each pixel
-    for (int i = 0; i < Height; i++) {
-        for (int j = 0; j < Width; j++) {
+    //}
 
-            // 1.--> Construct a ray, where ray is a unit vector from eye to pixel
-            int row_number = i;
-            int column_number = j;
-            // --> get pixel position
-            int width_screen = view[0].right;
-            int height_screen = view[0].top;
-            float Uc = -width_screen + width_screen*(2 * column_number / Width);
-            float Vr = -height_screen + height_screen * (2 * row_number / Height);
-            vec3 ray(Uc, Vr, -view[0].near);
-            // --> make it a unit vector
-            ray = normalize(ray);
-            
-            // 2.--> ray trace:
-            // --> having a scalar value for t increase with iterations 
+    //// STEP 2: create correct variables
+    //int Width = view[0].resolution.x;
+    //int Height = view[0].resolution.y;
+    //const char *fname6 = output_name[0].name.c_str();
+    //Pixel* pixels = new Pixel[Width*Height];
 
-            // --> check for closest intersection
+    //// Step 3: populate pixels
+    //for (int i = 0; i < Height; i++) {
+    //    for (int j = 0; j < Width; j++) {
 
-            // --> add up all colors
+    //        // 1.--> Construct a ray, where ray is a unit vector from eye to pixel
+    //        int row_number = i;
+    //        int column_number = j;
+    //        // --> get pixel position
+    //        int width_screen = view[0].right;
+    //        int height_screen = view[0].top;
+    //        float Uc = -width_screen + width_screen*(2 * column_number / Width);
+    //        float Vr = -height_screen + height_screen * (2 * row_number / Height);
 
-            //
-            
-            pixels[i].r = 255;
-            pixels[i].g = 0;
-            pixels[i].b = 200;
-        }
+    //        //innitialize a new ray struct object:
+    //        Ray ray = Ray();
+    //        ray.starting_point.x = Uc;
+    //        ray.starting_point.y = Vr;
+    //        ray.starting_point.z = -view[0].near;
 
-        
-    }
+    //        ray.direction.x = Uc;
+    //        ray.direction.y = Vr;
+    //        ray.direction.z = -view[0].near;
 
+    //        // --> make it a unit vector
+    //        ray.direction = normalize(ray.direction);
+    //        ray.depth = 3;
+    //        // 2.--> ray trace:
+    //        vec3 final_color = raytrace(ray);
+    //        //cout << "ray color: " << final_color.x << final_color.y << final_color.z << "\n";
+    //        pixels[i*Height + j].r =final_color.x*255;
+    //        pixels[i*Height + j].g =final_color.y*255;
+    //        pixels[i*Height + j].b =final_color.z*255;
+    //       // cout << "pixel rgb is: " << pixels[i * Width + j].r << pixels[i * Width + j].g << pixels[i * Width + j].b << "\n";
+    //      /*  pixels[i*Width + j].r = 100;
+    //        pixels[i * Width + j].g = 0;
+    //        pixels[i * Width + j].b = 0;*/
+    //    } 
+    //}
 
+    //save_imageP6(Width, Height, fname6, reinterpret_cast<unsigned char*> (pixels));
+    ////// TESTING FIND Intersection:
 
-    save_imageP6(Width, Height, fname6, reinterpret_cast<unsigned char*> (pixels));
+    //// create a new ray object
+    Ray ray = Ray();
+    ray.starting_point={ -1, 0, 0, 1 };
+    ray.direction = { 1, 0, 0, 0 };
+    ray.direction = normalize(ray.direction);
+    ray.depth = 2;
+    // create a new sphere
+    Sphere sphere = Sphere();
+    sphere.position = { 3, 0, 0 };
+    sphere.scaler = { 2, 2, 2 };
+
+    mat4x4 unit_matrix = { 1, 0, 0, 0,
+                           0, 1, 0, 0,
+                           0, 0, 1, 0,
+                           0, 0, 0, 1 };
+
+    sphere.transpose = translate(unit_matrix, sphere.position);
+    sphere.scaleTranspose = scale(sphere.transpose, sphere.scaler);
+    sphere.inverseScaleTranspose = inverse(sphere.scaleTranspose);
+    spheres.push_back(sphere);
+
+    pair <bool, IntersectedSphere> pair = compute_closest_intersection(ray);
+    vec4 intersection_point = pair.second.intersection_point;
+    cout << "The hard coded intersection is: " << intersection_point.x<< " " << intersection_point.y << " " << intersection_point.z << "\n";
+
     return 0;
 }
-
-//stream is a sequence of characters
-
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
-
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file
