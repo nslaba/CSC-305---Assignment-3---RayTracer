@@ -68,9 +68,9 @@ pair <bool,IntersectedSphere> compute_closest_intersection(Ray ray) {
     pair <bool, IntersectedSphere> inter_pair;
     inter_pair.first = false;
 
-    /* STEP 1.b) Create a new intersected sphere object in order to save the t, the order (j value) and the intersection point*/
-    IntersectedSphere intersected_sphere = IntersectedSphere();
-    inter_pair.second = intersected_sphere;
+    ///* STEP 1.b) Create a new intersected sphere object in order to save the t, the order (j value) and the intersection point*/
+    //IntersectedSphere intersected_sphere = IntersectedSphere();
+    //inter_pair.second = intersected_sphere;
 
     // The solutions' vector of vec2's parameters are:
     // --> x is t (ie vector scaler to reach intersection point) 
@@ -93,10 +93,12 @@ pair <bool,IntersectedSphere> compute_closest_intersection(Ray ray) {
         const float determinant = pow(dot(S, c), 2) - pow(length(c), 2) * (pow(length(S), 2) - 1);
         
         if (determinant >= 0.0){
+            
             // In this case the ray hits the sphere either once or twice, so find the solution for t
             float t1 = -(dot(S, c) / pow(length(c), 2)) - (sqrt(determinant)/pow(length(c),2));
             float t2 = -(dot(S, c) / pow(length(c), 2)) + (sqrt(determinant) / pow(length(c), 2));
-
+            //cout << "t1 is: " << t1 << "\n";
+            //cout << "t2 is: " << t2 << "\n";
             //push the smaller one & save which sphere was affected by storing the j value
             if (t1 < t2) {
                 //push t1 to solutions vector
@@ -118,30 +120,34 @@ pair <bool,IntersectedSphere> compute_closest_intersection(Ray ray) {
     /* STEP 2.b) pick the smallest intersection */
     inter_pair.second.order = solutions[0].y;
     inter_pair.second.t = solutions[0].x;
+    //cout << "t1 in solutions is: " << solutions[0].x << "\n";
 
     for (int i = 1; i < solutions.size(); i++) {
+       // cout << "current t in solutions is: " << solutions[i].x << "\n";
         if (solutions[i].x < inter_pair.second.t) {
-
+           // cout << "in if statement\n";
             inter_pair.second.t = solutions[i].x;
             inter_pair.second.order = solutions[i].y;
         }
     }
+   // cout << "final smallest t is saved as: " << inter_pair.second.t << "\n";
     
     /* STEP 2.b) Delete all the entries in the vector of "intersections" so that it can be reused */
     solutions.clear();
 
     //find the normal at that intersection point
-    vec4 normal = { spheres[intersected_sphere.order].cannonicalIntersectionPoint - vec4{spheres[intersected_sphere.order].position,0} };
-    normal = normal * spheres[intersected_sphere.order].inverseScaleTranspose;
+    vec4 normal = { spheres[inter_pair.second.order].cannonicalIntersectionPoint - vec4{spheres[inter_pair.second.order].position,0} };
+    normal = normal * spheres[inter_pair.second.order].inverseScaleTranspose;
     normal = normalize(normal);
     inter_pair.second.normal = normal;
 
     //find the reflected vector for later
     inter_pair.second.reflected_ray = -2 * dot(normal, ray.direction) * normal + ray.direction;
-
-
-    inter_pair.second.intersection_point = ray.starting_point + intersected_sphere.t * ray.direction;
     
+   
+    inter_pair.second.intersection_point = ray.starting_point + inter_pair.second.t * ray.direction;
+
+    //cout << inter_pair.second.intersection_point.x << inter_pair.second.intersection_point.y << inter_pair.second.intersection_point.z << "\n";
     //Return the intersected sphere object
     return inter_pair;
 }
@@ -235,7 +241,7 @@ vec3 raytrace(Ray ray) {
 }
 
 int main(int argc, char *argv[]) {
-    parse_file_string(read_file(argv[1]));
+    //parse_file_string(read_file(argv[1]));
 
     //// STEP 1.b: update the inverse scale and inverse transpose matrices of each sphere. 
     //mat4x4 unit_matrix = { 1, 0, 0, 0,
@@ -298,29 +304,30 @@ int main(int argc, char *argv[]) {
     ////// TESTING FIND Intersection:
 
     //// create a new ray object
-    Ray ray = Ray();
-    ray.starting_point={ -1, 0, 0, 1 };
-    ray.direction = { 1, 0, 0, 0 };
-    ray.direction = normalize(ray.direction);
-    ray.depth = 2;
-    // create a new sphere
-    Sphere sphere = Sphere();
-    sphere.position = { 3, 0, 0 };
-    sphere.scaler = { 2, 2, 2 };
+    //cout << "number of spheres is: " << spheres.size() << "\n";
+    //Ray ray = Ray();
+    //ray.starting_point={ -1, 0, 0, 1 };
+    //ray.direction = { 1, 0, 0, 0 };
+    //ray.direction = normalize(ray.direction);
+    //ray.depth = 2;
+    //// create a new sphere
+    //Sphere sphere = Sphere();
+    //sphere.position = { 3, 0, 0 };
+    //sphere.scaler = { 2, 2, 2 };
 
-    mat4x4 unit_matrix = { 1, 0, 0, 0,
-                           0, 1, 0, 0,
-                           0, 0, 1, 0,
-                           0, 0, 0, 1 };
+    //mat4x4 unit_matrix = { 1, 0, 0, 0,
+    //                       0, 1, 0, 0,
+    //                       0, 0, 1, 0,
+    //                       0, 0, 0, 1 };
 
-    sphere.transpose = translate(unit_matrix, sphere.position);
-    sphere.scaleTranspose = scale(sphere.transpose, sphere.scaler);
-    sphere.inverseScaleTranspose = inverse(sphere.scaleTranspose);
-    spheres.push_back(sphere);
-
-    pair <bool, IntersectedSphere> pair = compute_closest_intersection(ray);
-    vec4 intersection_point = pair.second.intersection_point;
-    cout << "The hard coded intersection is: " << intersection_point.x<< " " << intersection_point.y << " " << intersection_point.z << "\n";
+    //sphere.transpose = translate(unit_matrix, sphere.position);
+    //sphere.scaleTranspose = scale(sphere.transpose, sphere.scaler);
+    //sphere.inverseScaleTranspose = inverse(sphere.scaleTranspose);
+    //spheres.push_back(sphere);
+    //cout << "number of spheres is: " << spheres.size() << "\n";
+    //pair <bool, IntersectedSphere> pair = compute_closest_intersection(ray);
+    //vec4 intersection_point = pair.second.intersection_point;
+    //cout << "The hard coded intersection is: " << intersection_point.x<< " " << intersection_point.y << " " << intersection_point.z << "\n";
 
     return 0;
 }
