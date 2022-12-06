@@ -68,32 +68,37 @@ pair <bool,IntersectedSphere> compute_closest_intersection(Ray ray) {
     pair <bool, IntersectedSphere> inter_pair;
     inter_pair.first = false;
 
-    ///* STEP 1.b) Create a new intersected sphere object in order to save the t, the order (j value) and the intersection point*/
-    //IntersectedSphere intersected_sphere = IntersectedSphere();
-    //inter_pair.second = intersected_sphere;
-
     // The solutions' vector of vec2's parameters are:
     // --> x is t (ie vector scaler to reach intersection point) 
     // --> y is j=the numbered sphere in the forloop
-    vector <vec2> solutions; 
-    
+    vector <vec2> solutions;    
+    //cout << "initial solutions size is: " << solutions.size() << "\n";
+    /*//cout << "spheres size is: " << spheres.size();*/
     for (int j=0; j < spheres.size(); j++) {
+       // cout << "In for loop for spheres in find closest intersection func\n";
         /* STEP 1.c) invert ray for each sphere based on the sphere's scalars. */
         vec4 inverted_starting_point = spheres[j].inverseScaleTranspose * ray.starting_point;
-        vec4 inverted_direction = spheres[j].inverseScaleTranspose * ray.direction;
-        
-
-        /* STEP 1.d) Use the quadratic formula to check for solutions (intersections)
-         * --> If (determinant >= 0) then find the solution(s) representing the intersection pt(s) */
-
+        vec4 inverted_direction = spheres[j].inverseScaleTranspose * ray.direction;      
+        //cout << "ray's starting point is: " << ray.starting_point.x << ray.starting_point.y << ray.starting_point.z << ray.starting_point.w<<"\n";
+        //cout << "\nray's direction is: " << ray.direction.x << ray.direction.y << ray.direction.z << ray.direction.w<<"\n";
+        //Problem: determinant is ALWAYS pos!!
         // First store S (inverted starting point) and c (inverted direction) in NON-homogeneous coordinates
         vec3 S = { inverted_starting_point.x, inverted_starting_point.y, inverted_starting_point.z };
-        vec3 c = { inverted_direction.x, inverted_direction.y, inverted_direction.z };
-        
-        const float determinant = pow(dot(S, c), 2) - pow(length(c), 2) * (pow(length(S), 2) - 1);
-        
+        vec3 c = { inverted_direction.x, inverted_direction.y, inverted_direction.z };    
+        //cout << "inverted starting point is: " << inverted_starting_point.x << inverted_starting_point.y << inverted_starting_point.z << "\n";
+        /* STEP 1.d) Use the quadratic formula to check for solutions (intersections)
+         * --> If (determinant >= 0) then find the solution(s) representing the intersection pt(s) */
+        const float determinant = pow(dot(S, c), 2) - (pow(length(c), 2) * (pow(length(S), 2) - 1));
+        //cout << length(c) << "\n";
+        //cout << "S is: " << S.x << " " << S.y << " " << S.z << "\n";
+        //cout << "c is: " << c.x << " " << c.y << " " << c.z << "\n";
+        //cout << "the determinant is: " << determinant << "\n";
         if (determinant >= 0.0){
+            //set the boolean to true suggesting that there has been an intersection
             
+       /*     if (inter_pair.first) {
+                cout << "TRUE 1\n";
+            }*/
             // In this case the ray hits the sphere either once or twice, so find the solution for t
             float t1 = -(dot(S, c) / pow(length(c), 2)) - (sqrt(determinant)/pow(length(c),2));
             float t2 = -(dot(S, c) / pow(length(c), 2)) + (sqrt(determinant) / pow(length(c), 2));
@@ -104,16 +109,22 @@ pair <bool,IntersectedSphere> compute_closest_intersection(Ray ray) {
                 //push t1 to solutions vector
                 solutions.push_back(vec2{ t1,j });
                 spheres[j].cannonicalIntersectionPoint = inverted_starting_point + t1 * inverted_direction;
+                inter_pair.first = true;
             }
             else {
                 solutions.push_back(vec2{ t2,j });
                 spheres[j].cannonicalIntersectionPoint = inverted_starting_point + t1 * inverted_direction;
+                inter_pair.first = true;
             }
         }        
     }
-
+    //if (inter_pair.first) {
+    //    cout << "TRUE 2\n";
+    //}
     //If no solutions found then return a null vec4
-    if (solutions.size() == 0) {
+    //cout << "there are this many solutions: "<< solutions.size()<<"\n";
+    if (inter_pair.first!=true) {
+        //cout << "no solution";
         return inter_pair;
     }
 
@@ -121,7 +132,7 @@ pair <bool,IntersectedSphere> compute_closest_intersection(Ray ray) {
     inter_pair.second.order = solutions[0].y;
     inter_pair.second.t = solutions[0].x;
     //cout << "t1 in solutions is: " << solutions[0].x << "\n";
-
+    //inter_pair.first = true;
     for (int i = 1; i < solutions.size(); i++) {
        // cout << "current t in solutions is: " << solutions[i].x << "\n";
         if (solutions[i].x < inter_pair.second.t) {
@@ -142,11 +153,12 @@ pair <bool,IntersectedSphere> compute_closest_intersection(Ray ray) {
     inter_pair.second.normal = normal;
 
     //find the reflected vector for later
-    inter_pair.second.reflected_ray = -2 * dot(normal, ray.direction) * normal + ray.direction;
-    
+    inter_pair.second.reflected_ray = -2 * dot(normal, ray.direction) * normal + ray.direction;    
    
     inter_pair.second.intersection_point = ray.starting_point + inter_pair.second.t * ray.direction;
-
+    //if (inter_pair.first) {
+    //    cout << "TRUE 3\n";
+    //}
     //cout << inter_pair.second.intersection_point.x << inter_pair.second.intersection_point.y << inter_pair.second.intersection_point.z << "\n";
     //Return the intersected sphere object
     return inter_pair;
@@ -205,19 +217,21 @@ vec3 raytrace(Ray ray) {
     }
     //update ray depth to not raytrace forever
     ray.depth--;
-
+    /*cout << "in Raytrace func spheres size is: " << spheres.size();*/
     /* STEP 1: check for the closest intersection with all objects*/
     pair <bool,IntersectedSphere> closest_intersection = compute_closest_intersection(ray);
     //cout << "closest intersected sphere is numbered: " << closest_intersection.second.order << "\n";
     //vec4 intersection_point{ 0,0,0, 1 };//for now so that it compiles
+
     if (!closest_intersection.first) {
         // if there is no intersection then return the background color
         //cout << background_info[0].color.x << background_info[0].color.y << background_info[0].color.z;
-        return background_info[0].color;
-    }
-    cout << "something has been intersected\n";
+        return background_info.color;
+    } 
+    //cout << "something has been intersected\n";
 
-    ///* STEP 2: check for shadows and add them up*/
+    /* STEP 2: check for shadows and add them up*/
+    vec3 color_shadow = { 0,0,0 };
     //vec3 color_shadow= shadow_ray(lights[0], closest_intersection.second);
     //for (int i = 1; i < lights.size(); i++) {
     //    color_shadow.x += shadow_ray(lights[i], closest_intersection.second).x;
@@ -225,94 +239,165 @@ vec3 raytrace(Ray ray) {
     //    color_shadow.z += shadow_ray(lights[i], closest_intersection.second).z;
 
     //}
-    ///*STEP 3: raytrace for reflected rays*/
-    ////I need to somehow get which sphere i'm dealing with based on the closest intersection so that i can calculate the normal. Why don't I just make a global variable? sphere_num that gets updated whenever I call closest intersection pt. 
-    //// Does this mean I reflect the ray over a normal on the sphere? YES--> How can i get the normal???
+    /*STEP 3: raytrace for reflected rays*/
+    //I need to somehow get which sphere i'm dealing with based on the closest intersection so that i can calculate the normal. Why don't I just make a global variable? sphere_num that gets updated whenever I call closest intersection pt. 
+    // Does this mean I reflect the ray over a normal on the sphere? YES--> How can i get the normal???
 
-    //// initialize a new ray for the reflected ray
+    // initialize a new ray for the reflected ray
     //Ray reflected_ray = Ray();
     //reflected_ray.direction = closest_intersection.second.reflected_ray;
     //reflected_ray.depth = 3;
     //reflected_ray.starting_point = closest_intersection.second.intersection_point;
     //vec3 color_reflected = raytrace(reflected_ray);
-
+    vec3 color_reflected = { 0,0,0 };
     //cout << "the closest intersected sphere is: "<<(closest_intersection.second.order);
-    //return (vec3{ spheres[closest_intersection.second.order].color + spheres[closest_intersection.second.order].kr * color_reflected});
+    return (vec3{ spheres[closest_intersection.second.order].color + spheres[closest_intersection.second.order].kr * color_reflected});
 }
 
 int main(int argc, char *argv[]) {
-    //parse_file_string(read_file(argv[1]));
+    parse_file_string(read_file(argv[1]));
+    //cout << "after parsing spheres size is: " << spheres.size();
+    // STEP 1.b: update the inverse scale and inverse transpose matrices of each sphere. 
+    mat4x4 unit_matrix = { 1, 0, 0, 0,
+                           0, 1, 0, 0,
+                           0, 0, 1, 0,
+                           0, 0, 0, 1 };
+        
+    for (int m = 0; m < spheres.size();m++) {
+        spheres[m].transpose = translate(unit_matrix, spheres[m].position);
+        spheres[m].scaleTranspose = scale(spheres[m].transpose, spheres[m].scaler);
+        spheres[m].inverseScaleTranspose = inverse(spheres[m].scaleTranspose);
+    }
 
-    //// STEP 1.b: update the inverse scale and inverse transpose matrices of each sphere. 
-    //mat4x4 unit_matrix = { 1, 0, 0, 0,
-    //                       0, 1, 0, 0,
-    //                       0, 0, 1, 0,
-    //                       0, 0, 0, 1 };
-    //for (Sphere sphere : spheres) {
-    //    sphere.transpose = translate(unit_matrix, sphere.position);
-    //    sphere.scaleTranspose = scale(sphere.transpose, sphere.scaler);
-    //    sphere.inverseScaleTranspose = inverse(sphere.scaleTranspose);
+    //for (int q = 0; q < spheres.size(); q++) {
+    //    cout << "\nTHE transpose matrix is:\n";
 
+    //    for (int a = 0; a < 4; a++) {
+    //        for (int b = 0; b < 4; b++)
+    //        {
+    //            //print the row of first matrix
+    //            cout << spheres[q].transpose[a][b] << "   ";
+    //        }
+    //        cout << "\n";
+
+    //    }
+    //    cout << "\nTHE ScaleTranspose matrix is:\n";
+
+    //    for (int c = 0; c < 4; c++) {
+    //        for (int d = 0; d < 4; d++)
+    //        {
+    //            //print the row of first matrix
+    //            cout << spheres[q].scaleTranspose[c][d] << "   ";
+    //        }
+    //        cout << "\n";
+    //    }
+    //    cout << "\nTHE InverseScaleTranspose matrix is:\n";
+
+    //    for (int e = 0; e < 4; e++) {
+    //        for (int f = 0; f < 4; f++)
+    //        {
+    //            //print the row of first matrix
+    //            cout << spheres[q].inverseScaleTranspose[e][f] << "   ";
+    //        }
+    //        cout << "\n";
+    //    }
     //}
-
-    //// STEP 2: create correct variables
-    //int Width = view[0].resolution.x;
-    //int Height = view[0].resolution.y;
-    //const char *fname6 = output_name[0].name.c_str();
-    //Pixel* pixels = new Pixel[Width*Height];
-
-    //// Step 3: populate pixels
-    //for (int i = 0; i < Height; i++) {
-    //    for (int j = 0; j < Width; j++) {
-
-    //        // 1.--> Construct a ray, where ray is a unit vector from eye to pixel
-    //        int row_number = i;
-    //        int column_number = j;
-    //        // --> get pixel position
-    //        int width_screen = view[0].right;
-    //        int height_screen = view[0].top;
-    //        float Uc = -width_screen + width_screen*(2 * column_number / Width);
-    //        float Vr = -height_screen + height_screen * (2 * row_number / Height);
-
-    //        //innitialize a new ray struct object:
-    //        Ray ray = Ray();
-    //        ray.starting_point.x = Uc;
-    //        ray.starting_point.y = Vr;
-    //        ray.starting_point.z = -view[0].near;
-
-    //        ray.direction.x = Uc;
-    //        ray.direction.y = Vr;
-    //        ray.direction.z = -view[0].near;
-
-    //        // --> make it a unit vector
-    //        ray.direction = normalize(ray.direction);
-    //        ray.depth = 3;
-    //        // 2.--> ray trace:
-    //        vec3 final_color = raytrace(ray);
-    //        //cout << "ray color: " << final_color.x << final_color.y << final_color.z << "\n";
-    //        pixels[i*Height + j].r =final_color.x*255;
-    //        pixels[i*Height + j].g =final_color.y*255;
-    //        pixels[i*Height + j].b =final_color.z*255;
-    //       // cout << "pixel rgb is: " << pixels[i * Width + j].r << pixels[i * Width + j].g << pixels[i * Width + j].b << "\n";
-    //      /*  pixels[i*Width + j].r = 100;
-    //        pixels[i * Width + j].g = 0;
-    //        pixels[i * Width + j].b = 0;*/
-    //    } 
+    
+    //for (int z = 0; z < spheres.size(); z++) {
+    //    cout << "sphere:\n" << spheres[z].name << "\n"
+    //        << spheres[z].position.x << " " << spheres[z].position.y
+    //        << " " << spheres[z].position.z << " " << spheres[z].scaler.x
+    //        << " " << spheres[z].scaler.y << " " << spheres[z].scaler.z
+    //        << " " << spheres[z].color.x << " " << spheres[z].color.y
+    //        << " " << spheres[z].color.z << " " << spheres[z].ka
+    //        << " " << spheres[z].kd << " " << spheres[z].ks << " " << spheres[z].kr << " " << spheres[z].spec_exp << "\n";
     //}
+    //cout << "there are " << lights.size() << " # of lights\n";
+    //for (Light light : lights) {
+    //    cout << "light:\n" << light.name << "\n"
+    //       << light.position.x << " " << light.position.y
+    //       << " " << light.position.z << " " << " "
+    //       << light.color.x << " " << light.color.y
+    //       << " "<< light.color.z << "\n";
+    //}
+    //cout << "Within the view Struct there is: " << view.near << view.left << view.right << view.top << view.bottom << view.resolution.x << view.resolution.y;
 
-    //save_imageP6(Width, Height, fname6, reinterpret_cast<unsigned char*> (pixels));
+    //cout << "\nWithin the background_info struct there is: color" << background_info.color.x << background_info.color.y << background_info.color.z << " then ambient: " << background_info.ambient.x << background_info.ambient.y << background_info.ambient.z;
+    
+    //cout << "before pixel forloop spheres size is: " << spheres.size()<<"\n";
+    
+    // STEP 2: create correct variables
+    int Width = view.resolution.x;
+    int Height = view.resolution.y;
+    const char *fname6 = output_name.name.c_str();
+    Pixel* pixels = new Pixel[Width*Height];
+
+    float Uc;
+    float Vr;
+
+    // Step 3: populate pixels
+    for (int i = 0; i < Height; i++) {
+        for (int j = 0; j < Width; j++) {
+
+            // 1.--> Construct a ray, where ray is a unit vector from eye to pixel
+            int row_number = i;
+            int column_number = j;
+            // --> get pixel position
+            int width_screen = view.right;
+            int height_screen = view.top;
+            Uc = -(float)width_screen + (float)width_screen*(2 * (float)column_number / (float)Width);
+            Vr = -(float)height_screen + (float)height_screen * (2 * (float)row_number / (float)Height);
+      /*      cout << "Uc is: " << Uc<<"\n\n";
+            cout << "column number is: " << column_number << "\n\n";
+            cout << "row_number is: " << row_number << "\n\n";
+            cout << "Height is: " << Height << "\n\n";
+            cout << "Width is: " << Height << "\n\n";
+            cout << "Vr is: " << Vr << "\n\n";*/
+            //innitialize a new ray struct object:
+            Ray ray = Ray();
+            ray.starting_point.x = Uc;
+            ray.starting_point.y = Vr;
+            ray.starting_point.z = -view.near;
+            ray.starting_point.w = 1;
+            
+            ray.direction.x = Uc;
+            ray.direction.y = Vr;
+            ray.direction.z = -view.near;
+            ray.direction.w = 0;
+
+            // --> make it a unit vector
+            ray.direction = normalize(ray.direction);
+            ray.depth = 3;
+            // 2.--> ray trace:
+            //cout << "the starting pt in main is: "<<ray.starting_point.x<<" "<< ray.starting_point.y<<" "<< ray.starting_point.z<<"\n";
+            vec3 final_color = raytrace(ray);
+            //cout << "ray color: " << final_color.x << final_color.y << final_color.z << "\n";
+            pixels[i*Width + j].r =final_color.x*255;
+            pixels[i*Width + j].g =final_color.y*255;
+            pixels[i*Width + j].b =final_color.z*255;
+            
+            //pixels[]
+           // cout << "pixel rgb is: " << pixels[i * Width + j].r << pixels[i * Width + j].g << pixels[i * Width + j].b << "\n";
+          /*  pixels[i*Width + j].r = 100;
+            pixels[i * Width + j].g = 0;
+            pixels[i * Width + j].b = 0;*/
+        } 
+    }
+
+    //for each row
+    save_imageP6(Width, Height, fname6, reinterpret_cast<unsigned char*> (pixels));
     ////// TESTING FIND Intersection:
 
-    //// create a new ray object
+    ////// create a new ray object
     //cout << "number of spheres is: " << spheres.size() << "\n";
     //Ray ray = Ray();
-    //ray.starting_point={ -1, 0, 0, 1 };
-    //ray.direction = { 1, 0, 0, 0 };
+    //ray.starting_point={ 1, 3, 0, 1 };
+    //ray.direction = { 1, -1, 0, 0 };
     //ray.direction = normalize(ray.direction);
     //ray.depth = 2;
     //// create a new sphere
     //Sphere sphere = Sphere();
-    //sphere.position = { 3, 0, 0 };
+    //sphere.position = { 3, 1, 0 };
     //sphere.scaler = { 2, 2, 2 };
 
     //mat4x4 unit_matrix = { 1, 0, 0, 0,
@@ -324,6 +409,21 @@ int main(int argc, char *argv[]) {
     //sphere.scaleTranspose = scale(sphere.transpose, sphere.scaler);
     //sphere.inverseScaleTranspose = inverse(sphere.scaleTranspose);
     //spheres.push_back(sphere);
+
+    //// create a new sphere
+    //Sphere sphere2 = Sphere();
+    //sphere2.position = { 3, 1, 0 };
+    //sphere2.scaler = { 3, 3, 3 };
+
+    //mat4x4 unit_matrix2 = { 1, 0, 0, 0,
+    //                       0, 1, 0, 0,
+    //                       0, 0, 1, 0,
+    //                       0, 0, 0, 1 };
+
+    //sphere2.transpose = translate(unit_matrix2, sphere2.position);
+    //sphere2.scaleTranspose = scale(sphere2.transpose, sphere2.scaler);
+    //sphere2.inverseScaleTranspose = inverse(sphere2.scaleTranspose);
+    //spheres.push_back(sphere2);
     //cout << "number of spheres is: " << spheres.size() << "\n";
     //pair <bool, IntersectedSphere> pair = compute_closest_intersection(ray);
     //vec4 intersection_point = pair.second.intersection_point;

@@ -20,11 +20,11 @@ using namespace std;
 
 //vectors for the specific structs
 
-extern vector <View> view;
+extern View view;
 extern vector <Sphere> spheres;
 extern vector <Light> lights;
-extern vector <Background> background_info;
-extern vector <Output> output_name;
+extern Background background_info;
+extern Output output_name;
 extern vector <Ray> rays;
 
 //* FUNCTION DECLARATIONS OF PARCING.CPP *//
