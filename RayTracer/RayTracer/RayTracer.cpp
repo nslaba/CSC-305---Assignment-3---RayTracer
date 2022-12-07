@@ -155,7 +155,7 @@ pair <bool,IntersectedSphere> compute_closest_intersection(Ray ray) {
        
     inter_pair.second.intersection_point = ray.starting_point + inter_pair.second.t * ray.direction;
     //Save the view vector towards the intersection point
-    inter_pair.second.view_vector = vec4{ normalize(vec3{inter_pair.second.intersection_point}),0 };
+    inter_pair.second.view_vector = vec4{ -normalize(vec3{inter_pair.second.intersection_point}),0 };
    
     //cout << inter_pair.second.intersection_point.x << inter_pair.second.intersection_point.y << inter_pair.second.intersection_point.z << "\n";
     //Return the intersected sphere object
@@ -181,7 +181,7 @@ vec3 shadow_ray(Light light, IntersectedSphere intersected_sphere) {
         float light_distance = length(vec4{ vec4{light.position,0} - intersected_sphere.intersection_point });
         float sphere_distance = length(vec3{ closest_intersection.second.intersection_point - intersected_sphere.intersection_point });
         if (sphere_distance <= light_distance) {
-            //cout<<"in shadow\n";
+            cout<<"in shadow\n";
             return color;
         }
     }
@@ -361,9 +361,9 @@ int main(int argc, char *argv[]) {
             //cout << "the starting pt in main is: "<<ray.starting_point.x<<" "<< ray.starting_point.y<<" "<< ray.starting_point.z<<"\n";
             vec3 final_color = raytrace(ray);
             //cout << "ray color: " << final_color.x << final_color.y << final_color.z << "\n";
-            pixels[i*Width + j].r =final_color.x*255;
-            pixels[i*Width + j].g =final_color.y*255;
-            pixels[i*Width + j].b =final_color.z*255;
+            pixels[i*Width + j].r =std::min(final_color.x,1.0f)*255;
+            pixels[i*Width + j].g = std::min(final_color.y,1.0f)*255;
+            pixels[i*Width + j].b = std::min(final_color.z,1.0f)*255;
             
             //pixels[]
            // cout << "pixel rgb is: " << pixels[i * Width + j].r << pixels[i * Width + j].g << pixels[i * Width + j].b << "\n";
