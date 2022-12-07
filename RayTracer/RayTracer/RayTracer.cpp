@@ -171,25 +171,23 @@ vec3 shadow_ray(Light light, IntersectedSphere intersected_sphere) {
 
     /*STEP 2: Create a shadow ray (intersection pt-light) with starting point being the intersection_point and direction being the normalized dir towards the light*/
     Ray shadow_ray = Ray();
-    shadow_ray.starting_point = { intersected_sphere.intersection_point };
     shadow_ray.direction = { vec4{light.position,1.0} - intersected_sphere.intersection_point };
-    shadow_ray.direction = vec4{ normalize(vec3{ shadow_ray.direction }),0 };
+    shadow_ray.direction = -vec4{ normalize(vec3{ shadow_ray.direction }),0 };
 
+    shadow_ray.starting_point = vec4{ light.position, 1 };
+    //CHANGING THE DIRECTION OF SHADOW_RAY TO GO FROM LIGHT TOWARDS THE INTERSECTED PT
     //check if in shadow. If yes, then don't add diffuse and specular if no then compute DS
     pair <bool, IntersectedSphere> closest_intersection = compute_closest_intersection(shadow_ray);
-    if (!closest_intersection.first) { //Then it does intersect some spheres then check if the t value is less than the distance to the light
-        float light_distance = length(vec4{ vec4{light.position,0} - intersected_sphere.intersection_point });
-        float sphere_distance = length(vec3{ closest_intersection.second.intersection_point - intersected_sphere.intersection_point });
-        if (sphere_distance <= light_distance) {
-            cout<<"in shadow\n";
+    if (closest_intersection.first) { //Then it does intersect some spheres then check if the t value is less than the distance to the light
+        if (closest_intersection.second.order != intersected_sphere.order){
             return color;
         }
     }
+
     //otherwise compute Diffuse
-    color += light.color * spheres[intersected_sphere.order].kd * spheres[intersected_sphere.order].color * std::max(0.0f, dot(intersected_sphere.normal, vec3{ shadow_ray.direction }));
+    color += light.color * spheres[intersected_sphere.order].kd * spheres[intersected_sphere.order].color * std::max(0.0f, dot(intersected_sphere.normal, -vec3{ shadow_ray.direction }));
     // Compute Specular
-    //vec3 reflected_vector = 2 * dot(intersected_sphere.normal, -vec3{ shadow_ray.direction }) * intersected_sphere.normal + vec3{ shadow_ray.direction };
-    vec3 reflected_vector = reflect(-vec3{ shadow_ray.direction }, intersected_sphere.normal);
+    vec3 reflected_vector = reflect(vec3{ shadow_ray.direction }, intersected_sphere.normal);
     color += light.color * spheres[intersected_sphere.order].ks * (float)pow(std::max(0.0f,dot(reflected_vector, vec3{intersected_sphere.view_vector})), spheres[intersected_sphere.order].spec_exp);
    
     return color;
