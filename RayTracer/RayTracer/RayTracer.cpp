@@ -37,8 +37,8 @@ void save_imageP6(int Width, int Height, const char* fname, unsigned char* pixel
     fprintf(fp, "P6\n");
     fprintf(fp, "%d %d\n", Width, Height);
     fprintf(fp, "%d\n", maxVal);
-
-    for (int j = 0; j < Height; j++) {
+    // Modify the forloop so you switch top and bottom rows
+    for (int j = Height-1; j >=0; j--) {// j goes from 0 to 600
         fwrite(&pixels[j * Width * 3], 3, Width, fp);
     }
 
@@ -147,18 +147,16 @@ pair <bool,IntersectedSphere> compute_closest_intersection(Ray ray) {
     solutions.clear();
 
     //find the normal at that intersection point
-    vec4 normal = { spheres[inter_pair.second.order].cannonicalIntersectionPoint - vec4{spheres[inter_pair.second.order].position,0} };
+    vec4 normal = { spheres[inter_pair.second.order].cannonicalIntersectionPoint };
     normal = normal * spheres[inter_pair.second.order].inverseScaleTranspose;
-    normal = normalize(normal);
-    inter_pair.second.normal = normal;
+    
+    inter_pair.second.normal = normalize(vec3{normal});
 
-    //find the reflected vector for later
-    inter_pair.second.reflected_ray = -2 * dot(normal, ray.direction) * normal + ray.direction;    
-   
+       
     inter_pair.second.intersection_point = ray.starting_point + inter_pair.second.t * ray.direction;
-    //if (inter_pair.first) {
-    //    cout << "TRUE 3\n";
-    //}
+    //Save the view vector towards the intersection point
+    inter_pair.second.view_vector = vec4{ normalize(vec3{inter_pair.second.intersection_point}),0 };
+   
     //cout << inter_pair.second.intersection_point.x << inter_pair.second.intersection_point.y << inter_pair.second.intersection_point.z << "\n";
     //Return the intersected sphere object
     return inter_pair;
@@ -168,43 +166,32 @@ pair <bool,IntersectedSphere> compute_closest_intersection(Ray ray) {
  *         check if there is a shadow at the intersection pt if there isn't then add the ADS light, if there is then don't
  */
 vec3 shadow_ray(Light light, IntersectedSphere intersected_sphere) {
-    vec3 color{ 0,0,0 };
-    // Create a ray with starting point being the intersection_point and direction being the normalized dir towards the light
-    Ray ray = Ray();
-    ray.starting_point={intersected_sphere.intersection_point};
-    ray.direction = { vec4{light.position,1.0} - intersected_sphere.intersection_point };
-    ray.direction = normalize(ray.direction);
+    /*STEP 1: innitialize color as black since ambient will be present whether in shadow or not*/
+    vec3 color = { 0,0,0 };
 
-    //check if in shadow. If yes, then don't add if no then compute ADS and add
-    //It will be in shadow if there is an object in front of the light so check for the closest intersection from the light and if that intersection doesn't equal
-    //our intersection_point then too bad (will have to be careful with floating pt error!!). Or going from the object to the light. Either way
-    pair <bool, IntersectedSphere> closest_intersection = compute_closest_intersection(ray);
+    /*STEP 2: Create a shadow ray (intersection pt-light) with starting point being the intersection_point and direction being the normalized dir towards the light*/
+    Ray shadow_ray = Ray();
+    shadow_ray.starting_point = { intersected_sphere.intersection_point };
+    shadow_ray.direction = { vec4{light.position,1.0} - intersected_sphere.intersection_point };
+    shadow_ray.direction = vec4{ normalize(vec3{ shadow_ray.direction }),0 };
+
+    //check if in shadow. If yes, then don't add diffuse and specular if no then compute DS
+    pair <bool, IntersectedSphere> closest_intersection = compute_closest_intersection(shadow_ray);
     if (!closest_intersection.first) { //Then it does intersect some spheres then check if the t value is less than the distance to the light
         float light_distance = length(vec4{ vec4{light.position,0} - intersected_sphere.intersection_point });
         float sphere_distance = length(vec3{ closest_intersection.second.intersection_point - intersected_sphere.intersection_point });
         if (sphere_distance <= light_distance) {
+            //cout<<"in shadow\n";
             return color;
         }
     }
-
-
- 
-    //otherwise compute ADS
-    // r = Light.color.x * Ka + Lightx*Kd(N dot lightRayDir) + Lightx * Ks * (R dot V)^ n
-    
-    //I'm missing (R dot V) ^ n
-    color.x = light.color.x * spheres[intersected_sphere.order].ka 
-        + light.color.x*spheres[intersected_sphere.order].kd * dot(intersected_sphere.normal, ray.direction) 
-        + light.color.x* spheres[intersected_sphere.order].ks;
-    //* pow(dot(intersected_sphere.reflected_ray, ray.direction), spheres[intersected_sphere.order].spec_exp) 
-
-    color.y = light.color.y * spheres[intersected_sphere.order].ka
-        + light.color.y * spheres[intersected_sphere.order].kd * dot(intersected_sphere.normal, ray.direction)
-        + light.color.y * spheres[intersected_sphere.order].ks;
-
-    color.x = light.color.z * spheres[intersected_sphere.order].ka
-        + light.color.z * spheres[intersected_sphere.order].kd * dot(intersected_sphere.normal, ray.direction)
-        + light.color.z * spheres[intersected_sphere.order].ks;
+    //otherwise compute Diffuse
+    color += light.color * spheres[intersected_sphere.order].kd * spheres[intersected_sphere.order].color * std::max(0.0f, dot(intersected_sphere.normal, vec3{ shadow_ray.direction }));
+    // Compute Specular
+    //vec3 reflected_vector = 2 * dot(intersected_sphere.normal, -vec3{ shadow_ray.direction }) * intersected_sphere.normal + vec3{ shadow_ray.direction };
+    vec3 reflected_vector = reflect(-vec3{ shadow_ray.direction }, intersected_sphere.normal);
+    color += light.color * spheres[intersected_sphere.order].ks * (float)pow(std::max(0.0f,dot(reflected_vector, vec3{intersected_sphere.view_vector})), spheres[intersected_sphere.order].spec_exp);
+   
     return color;
 }
 
@@ -220,25 +207,25 @@ vec3 raytrace(Ray ray) {
     /*cout << "in Raytrace func spheres size is: " << spheres.size();*/
     /* STEP 1: check for the closest intersection with all objects*/
     pair <bool,IntersectedSphere> closest_intersection = compute_closest_intersection(ray);
-    //cout << "closest intersected sphere is numbered: " << closest_intersection.second.order << "\n";
-    //vec4 intersection_point{ 0,0,0, 1 };//for now so that it compiles
 
     if (!closest_intersection.first) {
         // if there is no intersection then return the background color
         //cout << background_info[0].color.x << background_info[0].color.y << background_info[0].color.z;
         return background_info.color;
     } 
+    // From now on only dealing with intersected objects
+    /* Initialize final color of object*/
+    vec3 final_color;
+    //Initialize ambient
+    final_color =  background_info.ambient* spheres[closest_intersection.second.order].ka*spheres[closest_intersection.second.order].color;
     //cout << "something has been intersected\n";
 
     /* STEP 2: check for shadows and add them up*/
-    vec3 color_shadow = { 0,0,0 };
-    //vec3 color_shadow= shadow_ray(lights[0], closest_intersection.second);
-    //for (int i = 1; i < lights.size(); i++) {
-    //    color_shadow.x += shadow_ray(lights[i], closest_intersection.second).x;
-    //    color_shadow.y += shadow_ray(lights[i], closest_intersection.second).y;
-    //    color_shadow.z += shadow_ray(lights[i], closest_intersection.second).z;
-
-    //}
+    //vec3 color_shadow = { 0,0,0 };
+    final_color+= shadow_ray(lights[0], closest_intersection.second);
+    for (int i = 1; i < lights.size(); i++) {
+        final_color += shadow_ray(lights[i], closest_intersection.second);
+    }
     /*STEP 3: raytrace for reflected rays*/
     //I need to somehow get which sphere i'm dealing with based on the closest intersection so that i can calculate the normal. Why don't I just make a global variable? sphere_num that gets updated whenever I call closest intersection pt. 
     // Does this mean I reflect the ray over a normal on the sphere? YES--> How can i get the normal???
@@ -250,8 +237,10 @@ vec3 raytrace(Ray ray) {
     //reflected_ray.starting_point = closest_intersection.second.intersection_point;
     //vec3 color_reflected = raytrace(reflected_ray);
     vec3 color_reflected = { 0,0,0 };
+    //cout << final_color.x << final_color.y << final_color.z << "\n";
     //cout << "the closest intersected sphere is: "<<(closest_intersection.second.order);
-    return (vec3{ spheres[closest_intersection.second.order].color + spheres[closest_intersection.second.order].kr * color_reflected});
+    //return (vec3{ spheres[closest_intersection.second.order].color + spheres[closest_intersection.second.order].kr * color_reflected});
+    return (final_color + spheres[closest_intersection.second.order].kr * color_reflected);
 }
 
 int main(int argc, char *argv[]) {

@@ -35,9 +35,9 @@ struct Sphere {
     float ks;
     float kr;
     int spec_exp;
-    mat4 transpose;
-    mat4 scaleTranspose;
-    mat4 inverseScaleTranspose; //For the normal
+    mat4 transpose;//call translate
+    mat4 scaleTranspose;//call scaleTranslate
+    mat4 inverseScaleTranspose; //call inverseTranspose
     vec4 cannonicalIntersectionPoint;
 };
 
@@ -77,8 +77,8 @@ struct Ray {
 //Struct for an intersected sphere
 struct IntersectedSphere {
     int order;
-    vec4 normal;
+    vec3 normal;
     float t;
     vec4 intersection_point;
-    vec4 reflected_ray;
+    vec4 view_vector;
 };
