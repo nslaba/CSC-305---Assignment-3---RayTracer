@@ -1,0 +1,9 @@
+diff a/RayTracer/RayTracer/RayTracer.cpp b/RayTracer/RayTracer/RayTracer.cpp	(rejected hunks)
+@@ -171,7 +171,6 @@
+ 
+     /*STEP 2: Create a shadow ray (intersection pt-light) with starting point being the intersection_point and direction being the normalized dir towards the light*/
+     Ray shadow_ray = Ray();
+-    shadow_ray.starting_point = { intersected_sphere.intersection_point };
+     shadow_ray.direction = { vec4{light.position,1.0} - intersected_sphere.intersection_point };
+     shadow_ray.direction = -vec4{ normalize(vec3{ shadow_ray.direction }),0 };
+ 

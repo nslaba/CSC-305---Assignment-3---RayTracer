@@ -35,10 +35,10 @@ struct Sphere {
     float ks;
     float kr;
     int spec_exp;
-    mat4 transpose;//call translate
-    mat4 scaleTranspose;//call scaleTranslate
-    mat4 inverseScaleTranspose; //call inverseTranspose
-    vec4 cannonicalIntersectionPoint;
+    mat4 translate;
+    mat4 scaleTranslate;
+    mat4 inverseTransform; 
+    vec3 cannonicalIntersectionPoint;
 };
 
 //Struct for light
@@ -68,9 +68,10 @@ struct Pixel {
 
 //Struct for a ray
 struct Ray {
-    string name;
-    vec4 starting_point;
-    vec4 direction;
+    
+    bool reflected;
+    vec3 starting_point;
+    vec3 direction;
     int depth;
 };
 
@@ -79,6 +80,6 @@ struct IntersectedSphere {
     int order;
     vec3 normal;
     float t;
-    vec4 intersection_point;
-    vec4 view_vector;
+    vec3 intersection_point;
+    vec3 view_vector;
 };
