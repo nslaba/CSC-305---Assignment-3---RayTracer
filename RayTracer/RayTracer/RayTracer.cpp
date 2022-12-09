@@ -153,11 +153,11 @@ pair <bool,IntersectedSphere> compute_closest_intersection(Ray ray) {
  *              with that was computed by compute_closest_intersection in raytracer.
  * Output:      vec3 representing rgb
  *
- * Purpose:     For the particular light we are dealing with, we innitialize a shadow_ray which goes from the light source towards the direction
- *              of the intersection we are dealing with. The direction is normalized. Then we compute the closest intersection for this shadow ray
- *              going from the light source. If there has been an intersection, then we check if the intersected sphere of the shadow ray is not the
- *              same as that of the original intersection. If it isn't then that means that there is a sphere closer to the light than the original 
- *              intersection so the original intersection is in shadow. In this case we simply return black.
+ * Purpose:     For the particular light we are dealing with, we innitialize a shadow_ray which goes from the intersection we are dealing with the towards
+ *              the light particular source. The direction is normalized. Then we compute the closest intersection for this shadow ray
+ *              going from original intersection. If there has been an intersection, then we check if it is closer than the light
+ *              If it is then that means that there is a sphere between the light and the original intersection placing it in shadow. In this case we simply 
+ *              return black.
  *              in the case the original intersection is not in shadow, then we go ahead and compute the diffuse and the specular for it. We then add
  *              them together and return them as rgb
  ******************************************************************************************************************************************************/
@@ -167,24 +167,6 @@ vec3 shadow_ray(Light light, IntersectedSphere original_intersection) {
 
     /*STEP 2: Create a shadow ray (intersection pt-light) with starting point being the intersection_point and direction being the normalized dir towards the light*/
     Ray shadow_ray = Ray();
-    //CHANGING THE DIRECTION OF SHADOW_RAY TO GO FROM LIGHT TOWARDS THE INTERSECTED PT INSTAD OF THE OTHER WAY AROUND
-    //shadow_ray.direction =  original_intersection.intersection_point -light.position;
-    //shadow_ray.direction = normalize( shadow_ray.direction );
-    //shadow_ray.starting_point = light.position;
-
-    //
-    ///* STEP 3: Compute the closest intersection from the light position and then check if the object it intersects is a new object*/
-    //pair <bool, IntersectedSphere> closest_intersection = compute_closest_intersection(shadow_ray);
-    //if (closest_intersection.first) { 
-    //    //It does intersect some spheres so check if the intersected sphere is the same as that of the original intersection
-    //    if (closest_intersection.second.order != original_intersection.order){
-    //        //return black
-    //        return color; 
-    //    }
-    //}
-    
-   
-    // CHANGED CODE: 
     shadow_ray.direction = light.position-original_intersection.intersection_point;
     shadow_ray.direction = normalize(shadow_ray.direction);
     shadow_ray.starting_point = original_intersection.intersection_point + 0.0001f *shadow_ray.direction;
@@ -194,18 +176,18 @@ vec3 shadow_ray(Light light, IntersectedSphere original_intersection) {
     pair <bool, IntersectedSphere> closest_intersection = compute_closest_intersection(shadow_ray);
     if (closest_intersection.first) {
         //It does intersect some spheres so check if the intersected sphere is the same as that of the original intersection
-        
         float light_distance = length(light.position - original_intersection.intersection_point);
-        float object_distance = length(shadow_ray.starting_point + closest_intersection.second.t * shadow_ray.direction);
-        
+        float object_distance = length(closest_intersection.second.t * shadow_ray.direction);
+    /*    if (original_intersection.order == 2 && original_intersection.intersection_point.x >-4  && closest_intersection.second.order == 1) {
+            cout << "object_distance is: " << object_distance << "\n";
+            cout << "light_distance is: " << light_distance << "\n";
+        }*/
         if (object_distance < light_distance) {
             //return black
             return color;
         }
     }
 
-    /*shadow_ray.direction = normalize(shadow_ray.direction);*/
-    // END OF CHANGED CODE
 
     /* STEP 4: Compute Diffuse*/
     color += light.color * spheres[original_intersection.order].kd * spheres[original_intersection.order].color * std::max(0.0f, dot(original_intersection.normal, shadow_ray.direction));
@@ -277,7 +259,6 @@ vec3 raytrace(Ray ray) {
     reflected_ray.depth = ray.depth;
     reflected_ray.starting_point = closest_intersection.second.intersection_point + 0.00001f*reflected_ray.direction;
     vec3 color_reflected = raytrace(reflected_ray);
-    //vec3 color_reflected = { 0,0,0 };
  
     return (color_local + spheres[closest_intersection.second.order].kr * color_reflected);
 }
@@ -286,7 +267,7 @@ vec3 raytrace(Ray ray) {
 int main(int argc, char *argv[]) {
     parse_file_string(read_file(argv[1]));
   
-    // STEP 1.b: update the inverse scale and inverse transpose matrices of each sphere. 
+    // STEP 1.b: update the scale, scaleTranslate and inverseTransform matrices of each sphere. 
     mat4x4 unit_matrix = { 1, 0, 0, 0,
                            0, 1, 0, 0,
                            0, 0, 1, 0,
@@ -346,48 +327,5 @@ int main(int argc, char *argv[]) {
 
     //for each row
     save_imageP6(Width, Height, fname6, reinterpret_cast<unsigned char*> (pixels));
-    ////// TESTING FIND Intersection:
-
-    ////// create a new ray object
-    //cout << "number of spheres is: " << spheres.size() << "\n";
-    //Ray ray = Ray();
-    //ray.starting_point={ 1, 3, 0, 1 };
-    //ray.direction = { 1, -1, 0, 0 };
-    //ray.direction = normalize(ray.direction);
-    //ray.depth = 2;
-    //// create a new sphere
-    //Sphere sphere = Sphere();
-    //sphere.position = { 3, 1, 0 };
-    //sphere.scaler = { 2, 2, 2 };
-
-    //mat4x4 unit_matrix = { 1, 0, 0, 0,
-    //                       0, 1, 0, 0,
-    //                       0, 0, 1, 0,
-    //                       0, 0, 0, 1 };
-
-    //sphere.transpose = translate(unit_matrix, sphere.position);
-    //sphere.scaleTranspose = scale(sphere.transpose, sphere.scaler);
-    //sphere.inverseScaleTranspose = inverse(sphere.scaleTranspose);
-    //spheres.push_back(sphere);
-
-    //// create a new sphere
-    //Sphere sphere2 = Sphere();
-    //sphere2.position = { 3, 1, 0 };
-    //sphere2.scaler = { 3, 3, 3 };
-
-    //mat4x4 unit_matrix2 = { 1, 0, 0, 0,
-    //                       0, 1, 0, 0,
-    //                       0, 0, 1, 0,
-    //                       0, 0, 0, 1 };
-
-    //sphere2.transpose = translate(unit_matrix2, sphere2.position);
-    //sphere2.scaleTranspose = scale(sphere2.transpose, sphere2.scaler);
-    //sphere2.inverseScaleTranspose = inverse(sphere2.scaleTranspose);
-    //spheres.push_back(sphere2);
-    //cout << "number of spheres is: " << spheres.size() << "\n";
-    //pair <bool, IntersectedSphere> pair = compute_closest_intersection(ray);
-    //vec4 intersection_point = pair.second.intersection_point;
-    //cout << "The hard coded intersection is: " << intersection_point.x<< " " << intersection_point.y << " " << intersection_point.z << "\n";
-
     return 0;
 }
