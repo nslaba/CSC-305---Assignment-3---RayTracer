@@ -178,10 +178,7 @@ vec3 shadow_ray(Light light, IntersectedSphere original_intersection) {
         //It does intersect some spheres so check if the intersected sphere is the same as that of the original intersection
         float light_distance = length(light.position - original_intersection.intersection_point);
         float object_distance = length(closest_intersection.second.t * shadow_ray.direction);
-    /*    if (original_intersection.order == 2 && original_intersection.intersection_point.x >-4  && closest_intersection.second.order == 1) {
-            cout << "object_distance is: " << object_distance << "\n";
-            cout << "light_distance is: " << light_distance << "\n";
-        }*/
+
         if (object_distance < light_distance) {
             //return black
             return color;
