@@ -15,61 +15,34 @@ Build simple ray tracer program creates ppm images of spheres by reading the pre
 
 ## Summary
 I have chosen to work in C++ as it is the fastest option. With C++ my images take a maximum of several seconds to be produced, whereas with python they could have taken up to several minutes. 
-The Raytracer is set up to support local illumination (Ambient, Diffuse and Specular), reflections and shadows using recursion.
+The Raytracer is set up to support local illumination (Ambient, Diffuse and Specular), reflections and shadows using recursion of depth 3.
 
 Illumination:
+
 <img width="296" alt="image" src="https://user-images.githubusercontent.com/77686772/213516026-e0d95cc5-1020-4341-beee-b9faf225a24f.png">
 
 Specular light:
+
 <img width="278" alt="image" src="https://user-images.githubusercontent.com/77686772/213516660-4ebb9e20-0ada-4f58-bb89-430e6cd3cd2b.png">
 
 Reflections:
+
 <img width="281" alt="image" src="https://user-images.githubusercontent.com/77686772/213516956-ffb2a74b-0ac3-49db-bd82-560ac94b9867.png">
 
 Shadows:
+
 <img width="294" alt="image" src="https://user-images.githubusercontent.com/77686772/213516339-02479661-8701-4c06-984b-e1eef1caf113.png">
 
 
 
 
 ## Functionality
+My project first deals with the input text file by reading it, parsing it and populating the proper struct variables. All of my parsing is done in a seperate 
+file called Parcing.cpp.
+
+Once all of my variables are updated, the main in RayTracer.cpp constructs the correct view plane. Using the Width and the Height it creates an array of pixel structs which hold RGB components. Once the array of pixels and the view plane are generated, the main is ready to create the Ray struct (defined in structs.hpp) particular to the particular pixel. To compute the color of this ray Ray, ratrace(ray) is called returning its color in RGB. The color is then stored in the array of pixels.
+
+Raytrace(ray):
+raytrace is a recursive function that repeatedly finds the closest intersection for the particular ray. It checks if there has been an intersection or not and if there hasn't been any, then it returns black for a reflected ray and returns the background color for an original ray. If there has been an intersection, then it calculates the given shadows casted by each light (shadow_ray function). Lastly the depth of ray is reduced and raytracer is called again with the now reflected ray.
 
 
-## Design
-
-
-What I have done:
-Within my main function I first parse the input
-file by calling "parse_file_string(read_file[argv[1]])"
-all my parsing is done in a seperate file called Parsing.cpp
-and Parsing.h contains all the declerations for Parsing.cpp.
-
-Parsing.cpp-->
-takes the input file and copies it into a string in order to not
-have to work with the file throughout. 
-Then it calls populate_structs which populates the nescessary structs 
-defined in structs.hpp.
-
-After parsing, my mane updates the nescessary matrices for each sphere
-that are all stored as structs within a "spheres" vector.
-
-Once all of my variables have been updated, the main goes on to create the 
-correct view plane in order to generate the right rays. It computes the Width
-and the Height and creates an array of pixel structs which hold rgb components.
-My main is now ready to create each ray by creating a double forloop and computing
-Uc and Vr. With this it has enough information to create a new Ray struct (defined
-in structs.hpp) with a starting point (vec3), a normalized direction (vec3), depth 
-(for recursion) and a boolean to state whether we are dealing with a reflected ray or not.
-To compute the color of this ray, raytrace(ray) is called returning its color.
-
-Raytrace: 
-a recursive function that repeatedly finds the closest intersection with the help of 
-"compute_closest_intersection" for the particular ray it is dealing with. It then checks
-if there has been an intersection or not and if there isn't it returns black for a reflected 
-ray and returns the background color for an original ray. If there has been an intersection 
-though, it then computes all the shadow components for each light shining on it with "shadow_ray"
-function. It then reduces its depth and calls itself again with a reflected ray of the previous ray.
-
-
-I have omitted:
-Nothing in particular. 
