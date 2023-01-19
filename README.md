@@ -1,11 +1,8 @@
-### RayTracer
+### RayTracer ~ Assignment 3 ~ CSC 305
 
 ## Task
 
 Build simple ray tracer program creates ppm images of spheres by reading the present text files' specifications.
-
-Assignment 3 CSC 305
-Natalie Slaba
 
 ## Criteria
 - Build a raytracer using either c++, python or java
@@ -17,8 +14,23 @@ Natalie Slaba
 - Output should be a ppm image
 
 ## Summary
-I have chosen to work in C++ as it is nutoriously fast. Since my raytracer is built on recursion, I wanted to reduce 
-the amount of wait time as much as possible. 
+I have chosen to work in C++ as it is the fastest option. With C++ my images take a maximum of several seconds to be produced, whereas with python they could have taken up to several minutes. 
+The Raytracer is set up to support local illumination (Ambient, Diffuse and Specular), reflections and shadows using recursion.
+
+Illumination:
+<img width="296" alt="image" src="https://user-images.githubusercontent.com/77686772/213516026-e0d95cc5-1020-4341-beee-b9faf225a24f.png">
+
+Specular light:
+<img width="278" alt="image" src="https://user-images.githubusercontent.com/77686772/213516660-4ebb9e20-0ada-4f58-bb89-430e6cd3cd2b.png">
+
+Reflections:
+<img width="281" alt="image" src="https://user-images.githubusercontent.com/77686772/213516956-ffb2a74b-0ac3-49db-bd82-560ac94b9867.png">
+
+Shadows:
+<img width="294" alt="image" src="https://user-images.githubusercontent.com/77686772/213516339-02479661-8701-4c06-984b-e1eef1caf113.png">
+
+
+
 
 ## Functionality
 
