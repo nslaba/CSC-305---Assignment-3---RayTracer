@@ -45,4 +45,5 @@ Once all of my variables are updated, the main in RayTracer.cpp constructs the c
 Raytrace(ray):
 raytrace is a recursive function that repeatedly finds the closest intersection for the particular ray. It checks if there has been an intersection or not and if there hasn't been any, then it returns black for a reflected ray and returns the background color for an original ray. If there has been an intersection, then it calculates the given shadows casted by each light (shadow_ray function). Lastly the depth of ray is reduced and raytracer is called again with the now reflected ray.
 
-
+## Grade received
+100%
